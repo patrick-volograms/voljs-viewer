@@ -12,6 +12,11 @@ export function init() {
 }
 
 export function open(url, options) {
+    if (video == null) {
+        console.warn('video is not initialised, call init() first');
+        return;
+    }
+
 	video.autoplay = options?.autoplay ?? false;
 	video.muted = options?.muted ?? true; // Must be true for play without page interaction: https://goo.gl/xX8pDD
 	video.loop = options?.loop ?? true;
@@ -21,8 +26,13 @@ export function open(url, options) {
 }
 
 export function set_video_frame_callback(callback) {
-    video_frame_callback = function (now, meta) {
-        callback( Math.trunc(meta.mediaTime * fps) );
+    if (video == null) {
+        console.warn('video is not initialised, call init() first');
+        return;
+    }
+
+    video_frame_callback = function () {
+        callback( Math.trunc(video.currentTime * fps) );
         if (is_playing) {
             video.requestVideoFrameCallback( video_frame_callback );
         }
@@ -30,22 +40,42 @@ export function set_video_frame_callback(callback) {
 } 
 
 export function start() {
+    if (video == null) {
+        console.warn('video is not initialised, call init() first');
+        return;
+    }
+
     video.play();
     is_playing = true;
     video.requestVideoFrameCallback( video_frame_callback );
 }
 
 export function resume() {
+    if (video == null) {
+        console.warn('video is not initialised, call init() first');
+        return;
+    }
+
     video.play();
 }
 
 export function pause() {
+    if (video == null) {
+        console.warn('video is not initialised, call init() first');
+        return;
+    }
+
     video.pause();
 }
 
 export function close() {
-    video.pause();
+    if (video == null) {
+        console.warn('video is not initialised, call init() first');
+        return;
+    }
+    
+    video?.pause();
     video_frame_callback = () => {}
     is_playing = false;
-    video.remove();
+    video?.remove();
 }

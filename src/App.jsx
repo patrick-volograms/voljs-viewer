@@ -6,8 +6,6 @@ import Stats from 'three/examples/jsm/libs/stats.module';
 import * as VolPlayer from './web_vol_lib/vol_player.mjs';
 import { video } from './web_vol_lib/vol_av.mjs';
 import { Float32BufferAttribute, Uint16BufferAttribute } from 'three';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
-import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton';
 
 var volo_mesh = {};

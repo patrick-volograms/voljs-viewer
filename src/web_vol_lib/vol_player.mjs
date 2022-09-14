@@ -12,8 +12,12 @@ var prev_loaded_key_frame = -1;
 var last_loaded_frame = -1;
 
 export async function init() {
-    await VolGeom.init_sync();
-    VolAv.init();
+    let v = await VolGeom.init_sync();
+    if (v > -1) {
+        VolAv.init();
+        console.log(VolGeom.is_module_initialised());
+    }
+    return v;
 }
 
 export async function open(hdr, seq, vid, vid_options) {
@@ -22,6 +26,7 @@ export async function open(hdr, seq, vid, vid_options) {
 
     VolAv.set_video_frame_callback(async function(frame_number) {
         if (!is_playing) return;
+        if (!VolGeom.is_module_initialised()) return;
         if (frame_number == last_loaded_frame) return;
         if (frame_number != last_loaded_frame + 1) {
             console.warn('Frame jump from ' + last_loaded_frame + ' to ' + frame_number);
@@ -74,5 +79,4 @@ export function close() {
     VolAv.close();
     VolGeom.free_file_info();
     is_playing = false;
-    last_loaded_frame = -1;
 }
