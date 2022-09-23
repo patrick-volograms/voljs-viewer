@@ -13,6 +13,7 @@ var Module = {
     initialising: false 
 };
 
+export var max_size = 0;
 export var vp = [];
 export var vp_sz = -1;
 export var uv = [];
@@ -92,15 +93,30 @@ export async function init_sync() {
 
 export function create_file_info(hdr_filename, seq_filename) {
     if (!Module.initialised) return module_not_initialised();
-    return Module.ccall('create_file_info', BOOL, [STR, STR], [hdr_filename, seq_filename]);
+    var opened = Module.ccall('create_file_info', BOOL, [STR, STR], [hdr_filename, seq_filename])
+    .then(() => {
+        if (opened) {
+            max_size = Module.ccall('get_biggest_frame_blob_sz', NUM);
+            console.warn(max_size);
+        }
+    });
+    return opened;
 }
 
 export async function create_file_info_sync(hdr_filename, seq_filename) {
     if (!Module.initialised) return module_not_initialised();
     var res = false;
     await execute_promise(
-        () => create_file_info(hdr_filename, seq_filename),
-        (r) => res = r,
+        () => {
+            return Module.ccall('create_file_info', BOOL, [STR, STR], [hdr_filename, seq_filename]);
+        },
+        async function (r) { 
+            res = r;
+            if (r) {
+                max_size = Module.ccall('get_biggest_frame_blob_sz', NUM)
+                console.warn(max_size);
+            }
+        },
         (err) => console.error(err)
     );
     loaded_paths = [hdr_filename, seq_filename];

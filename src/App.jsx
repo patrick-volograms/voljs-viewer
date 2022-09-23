@@ -1,5 +1,18 @@
 import { useEffect, useState } from 'react'
 import './App.css'
+
+import Button from '@mui/material/Button';
+import Box from '@mui/material/Box';
+import Container from '@mui/material/Container';
+import SpeedDial from '@mui/material/SpeedDial';
+import SpeedDialAction from '@mui/material/SpeedDialAction';
+import ViewInArIcon from '@mui/icons-material/ViewInAr';
+import AttractionsIcon from '@mui/icons-material/Attractions';
+import LandscapeIcon from '@mui/icons-material/Landscape';
+import TerminalIcon from '@mui/icons-material/Terminal';
+import PersonIcon from '@mui/icons-material/Person';
+import StopCircleIcon from '@mui/icons-material/StopCircle';
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import Stats from 'three/examples/jsm/libs/stats.module';
@@ -7,47 +20,69 @@ import * as VolPlayer from './web_vol_lib/vol_player.mjs';
 import { video } from './web_vol_lib/vol_av.mjs';
 import { Float32BufferAttribute, Uint16BufferAttribute } from 'three';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton';
+import { VRButton } from 'three/examples/jsm/webxr/VRButton';
+import { BoxLineGeometry } from 'three/examples/jsm/geometries/BoxLineGeometry';
+
+const NOR = 'none';
+const AR = 'immersive-ar';
+const VR = 'immersive-vr';
+
+const vr_session_init_options = {
+	optionalFeatures: [ 'local-floor', 'bounded-floor', 'hand-tracking', 'layers' ]
+}
+
+let page_buttons = [];
+
+var current_mode = NOR;
+var xr_session;
 
 var volo_mesh = {};
 var volo_geometry = {};
 var volo_texture;
 var scene_obj;
 
+let stats;
 let renderer;
 let reticle;
 let camera;
 let controller;
 let hitTestSource = null;
 let hitTestSourceRequested = false;
+var non_r_controls;
 
-const MAX_POINTS = 30000
+var max_points;
 var positions;
 var tex_coords;
+
+var vr_controller_1;
+var vr_controller_2;
+
+var canvas_container;
 
 function App() {
 	const scene = new THREE.Scene();
 	
 	useEffect(() => {
-
+		canvas_container = document.getElementById( 'canvas-container' );
     	camera = new THREE.PerspectiveCamera(
       		50, 
-      		window.innerWidth / window.innerHeight,
+      		canvas_container.offsetWidth / canvas_container.offsetHeight,
       		0.1, 1000
     	);
-    	camera.position.z = 5;
 
     	const canvas = document.getElementById('threeCanvas');
     	renderer = new THREE.WebGLRenderer({
       		canvas, antialias: true, alpha: true,
     	});
-    	renderer.setSize(window.innerWidth, window.innerHeight);
-		renderer.xr.enabled = true;
-    	document.body.appendChild(renderer.domElement);
+    	renderer.setSize(canvas_container.offsetWidth, canvas_container.offsetHeight);
+    	//canvas_container.appendChild(renderer.domElement);
 
-		const controls = new OrbitControls(camera, renderer.domElement);
+		non_r_controls = new OrbitControls(camera, renderer.domElement);
+		camera.position.set( 0, 1.6, 3 );
+		camera.rotation.set( 0, 0, 0 );
 
-		const stats = Stats();
-		document.body.appendChild(stats.dom);
+		stats = Stats();
+		canvas_container.appendChild(stats.dom);
 
 		const animate = () => {
 			renderer.setAnimationLoop( render );
@@ -66,16 +101,11 @@ function App() {
 		reticle.visible = false;
 		scene.add( reticle );
 
-		async function xr_check() {		
-			if (await navigator.xr.isSessionSupported('immersive-ar')) {
-				document.body.appendChild( 
-					ARButton.createButton( renderer, {
-						requiredFeatures: [ 'hit-test' ]
-					} )
-				);
-			}
-		}
-		xr_check();
+		let room = new THREE.LineSegments(
+			new BoxLineGeometry( 6, 6, 6, 10, 10, 10 ).translate( 0, 3, 0 ),
+			new THREE.LineBasicMaterial( { color: 0x808080 } )
+		);
+		scene.add( room );
 
 		window.addEventListener( 'resize', onWindowResize );
 
@@ -93,13 +123,24 @@ function App() {
 	}
 
 	function onWindowResize() {
-		camera.aspect = window.innerWidth / window.innerHeight;
+		//console.log(window.innerWidth, window.innerHeight);
+		console.debug(canvas_container.offsetWidth, canvas_container.offsetHeight);
+		camera.aspect = canvas_container.offsetWidth / canvas_container.offsetHeight;
 		camera.updateProjectionMatrix();
-		renderer.setSize( window.innerWidth, window.innerHeight );
+		renderer.setSize( canvas_container.offsetWidth, canvas_container.offsetHeight );
 	}
 
 	async function start_vol_player() {
-		await VolPlayer.init();
+		var v = await VolPlayer.init();
+		console.debug(v);
+
+		await VolPlayer.open(
+			'/src/assets/calif/header.vols', 
+			'/src/assets/calif/sequence_0.vols', 
+			'/src/assets/calif/output.mp4');
+
+		max_points = await VolPlayer.get_max_sz();
+		console.debug(max_points);
 
 		volo_texture = new THREE.VideoTexture(
 			video
@@ -108,17 +149,17 @@ function App() {
 
 		volo_geometry = new THREE.BufferGeometry();
 		volo_geometry.name = 'vologram_geom';
-		positions = new Float32Array(MAX_POINTS * 3);
+		positions = new Float32Array(max_points * 3);
 		volo_geometry.setAttribute( 
 			'position',
 			new THREE.BufferAttribute(positions, 3)
 		);
-		tex_coords = new Float32Array(MAX_POINTS * 2);
+		tex_coords = new Float32Array(max_points * 2);
 		volo_geometry.setAttribute( 
 			'uv',
 			new Float32BufferAttribute(tex_coords, 2)
 		);
-		var ind = new Uint16Array(MAX_POINTS);
+		var ind = new Uint16Array(max_points);
 		volo_geometry.setIndex( new Uint16BufferAttribute(ind, 1) )
 
 		const mat = new THREE.MeshBasicMaterial( { 
@@ -127,15 +168,11 @@ function App() {
 			} );
 		volo_mesh = new THREE.Mesh(volo_geometry, mat);
 		volo_mesh.name = 'Vologram';
-		volo_mesh.scale.x = 0.5;
-		volo_mesh.scale.y = 0.5;
-		volo_mesh.scale.z = 0.5;
+		volo_mesh.scale.x = 1;
+		volo_mesh.scale.y = 1;
+		volo_mesh.scale.z = 1;
+		volo_mesh.position.z = -2;
 		scene.add(volo_mesh);
-
-		await VolPlayer.open(
-			'/src/assets/calif/header.vols', 
-			'/src/assets/calif/sequence_0.vols', 
-			'/src/assets/calif/output.mp4');
 		
 		VolPlayer.set_frame_callback(function (frameNumber, key, vert, uvs, ind) {
 			volo_geometry.index.array = ind.slice();
@@ -150,8 +187,8 @@ function App() {
 	}
 
 	function print_scene() {
-		console.log(scene);
-		console.debug(volo_geometry);
+		console.debug(renderer.xr.getSession());
+		console.debug(camera);
 	}
 
 	function clear_console() {
@@ -164,7 +201,84 @@ function App() {
 		VolPlayer.close();
 	}
 
+	function init_vr( session ) {
+		camera = new THREE.PerspectiveCamera( 
+			50, window.innerWidth / window.innerHeight, 0.1, 10 );
+		camera.position.set( 0, 1.6, 3 );
+		renderer.setPixelRatio( window.devicePixelRatio );
+		renderer.setSize( window.innerWidth, window.innerHeight );
+		renderer.outputEncoding = THREE.sRGBEncoding;
+		renderer.xr.enabled = true;
+
+		renderer.xr.setSession( session );
+		session.addEventListener( 'end', deinit_vr );
+
+		document.addEventListener( 'mousedown', vr_touch_handler );
+		document.addEventListener( 'mouseup', vr_touch_handler );
+
+		start_vol_player();
+	}
+
+	function deinit_vr() {
+		vr_touch_end( null );
+		current_mode = NOR;
+		document.removeEventListener( 'mousedown', vr_touch_handler );
+		document.removeEventListener( 'mouseup', vr_touch_handler );
+
+		canvas_container = document.getElementById( 'canvas-container' );
+    	camera = new THREE.PerspectiveCamera(
+      		50, 
+      		canvas_container.offsetWidth / canvas_container.offsetHeight,
+      		0.1, 1000
+    	);
+
+    	renderer.setPixelRatio( window.devicePixelRatio );
+    	renderer.setSize(canvas_container.offsetWidth, canvas_container.offsetHeight);
+
+		non_r_controls = new OrbitControls(camera, renderer.domElement);
+		camera.position.set( 0, 1.6, 3 );
+		camera.rotation.set( 0, 0, 0 );
+	}
+
+	function init_ar( session ) {
+		camera = new THREE.PerspectiveCamera( 
+			50, window.innerWidth / window.innerHeight, 0.1, 10 );
+		camera.position.set( 0, 1.6, 3 );
+		renderer.setPixelRatio( window.devicePixelRatio );
+		renderer.setSize( window.innerWidth, window.innerHeight );
+		renderer.outputEncoding = THREE.sRGBEncoding;
+		renderer.xr.enabled = true;
+
+		renderer.xr.setSession( session );
+
+		start_vol_player();
+	}
+
 	function render( timestamp, frame ) {
+		stats.update();
+
+		switch (current_mode) {
+			case VR:
+			{
+				render_in_vr();
+				break;
+			}
+			case AR: 
+			{
+				render_in_ar( frame );
+				break;
+			}
+			default:
+				render_in_no_r();
+		}
+	}
+
+	function render_in_no_r() {
+		non_r_controls.update();
+		renderer.render( scene, camera );
+	}
+
+	function render_in_ar( frame ) {
 		if ( frame ) {
 			const referenceSpace = renderer.xr.getReferenceSpace();
 			const session = renderer.xr.getSession();
@@ -198,17 +312,143 @@ function App() {
 		renderer.render( scene, camera );
 	}
 
+	function render_in_vr() {
+		renderer.render(scene, camera);
+		if ( vr_touch_down ) {
+			var touch_length = Date.now() - vr_touch_start_time;
+			console.debug( touch_length );
+			if ( touch_length > 3000 ) {
+				console.debug( 'closing session' );
+				console.debug( renderer.xr );
+				console.debug( renderer.xr.getSession() );
+				renderer.xr.getSession()?.end();
+			}
+		}
+	}
+
+	function start_ar() {
+		if (! ('xr' in navigator)) {
+			console.error('xr not supported');
+			alert('xr not supported');
+			return;
+		}
+
+		navigator.xr.isSessionSupported('immersive-ar')
+		.then( (supported) => {
+			if (!supported) {
+				console.error('ar not supported');
+				alert('ar not supported');
+			}
+			else {
+				navigator.xr.requestSession(AR, vr_session_init_options)
+				.then( (session) => {
+					console.debug('ar ready');
+					console.debug(session);
+					current_mode = AR;
+					xr_session = session;
+					init_ar(session);
+				})
+				.catch( (error) => {
+					console.error(error);
+				});
+			}
+		})
+	}
+
+	function start_vr() {
+		if (! ('xr' in navigator)) {
+			console.error('xr not supported');
+			alert('xr not supported');
+			return;
+		}
+
+		navigator.xr.isSessionSupported(VR)
+		.then( (supported) => {
+			if (!supported) {
+				console.error('vr not supported');
+				alert('vr not supported');
+			}
+			else {
+				navigator.xr.requestSession(VR, vr_session_init_options)
+				.then( (session) => {
+					console.debug('vr ready');
+					console.debug(session);
+					current_mode = VR;
+					xr_session = session;
+					init_vr(session);
+				})
+				.catch( (error) => {
+					console.error(error);
+				});
+			}
+		})
+	}
+
+	function vr_touch_handler( event ) {
+		console.debug( event );
+		switch (event.type) {
+			case "touchstart": break;
+			case "touchmove": break;
+			case "touchend": break;
+			case "mousedown": vr_touch_start( event ); break;
+			case "mousemove": break;
+			case "mouseup": vr_touch_end( event ); break;
+			default: return;
+		}
+	}
+
+	var vr_touch_start_time = -1;
+	var vr_touch_down = false;
+
+	function vr_touch_start( event ) {
+		console.debug( event );
+		vr_touch_start_time = Date.now();
+		vr_touch_down = true; 
+	}
+
+	function vr_touch_end( event ) {
+		vr_touch_down = false;
+	}
+
+	const speed_dial_actions = [
+		{ icon: <ViewInArIcon/>, name:'AR', onclick: start_ar },
+		{ icon: <ViewInArIcon/>, name:'VR', onclick: start_vr },
+		{ icon: <TerminalIcon/>, name:'Clear Console', onclick: clear_console},
+		{ icon: <LandscapeIcon/>, name:'Print Scene', onclick: print_scene},
+		{ icon: <StopCircleIcon/>, name:'Stop Player', onclick: stop_player},
+		{ icon: <PersonIcon/>, name:'Play Vologram', onclick: start_vol_player},
+	]
+
   	return (
-    <div>
-		<button onClick={start_vol_player}>Load OBJ</button>
-		<button onClick={print_scene}>Print Scene</button>
-		<button onClick={stop_player}>Stop Player</button>
-		<button onClick={clear_console}>Clear Console</button>
-		<div>
-			<canvas id="threeCanvas"/>
-		</div>
-    </div>
-	
+	<Container id='canvas-container'
+		sx={{
+			position: 'fixed',
+			top: '0px',
+			left: '0px',
+			padding: 0,
+			paddingLeft: 0,
+			height: '100vh',
+			minWidth: '100%',
+			justify: 'solid'
+		}}
+	>
+		<canvas id='threeCanvas'/>	
+		<SpeedDial
+			ariaLabel='Quick Actions'
+			sx={{position: 'absolute', bottom: 16, right: 16}}
+			icon={<AttractionsIcon/>}
+		>
+			{speed_dial_actions.map((action) => (
+				<SpeedDialAction
+					key={action.name}
+					icon={action.icon}
+					tooltipOpen
+					tooltipTitle={action.name}
+					onClick={action.onclick}
+				/>
+			))}
+		</SpeedDial>
+	</Container>
   )
 }
 

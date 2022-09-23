@@ -15,7 +15,6 @@ export async function init() {
     let v = await VolGeom.init_sync();
     if (v > -1) {
         VolAv.init();
-        console.log(VolGeom.is_module_initialised());
     }
     return v;
 }
@@ -54,6 +53,10 @@ export async function open(hdr, seq, vid, vid_options) {
         last_loaded_frame = frame_number;
         frame_ready_callback(frame_number, is_key, verts, uvs, inds);
     });
+}
+
+export async function get_max_sz() {
+    return VolGeom.max_size;
 }
 
 export function set_frame_callback(callback) {

@@ -5266,6 +5266,11 @@ var _free_file_info = Module["_free_file_info"] = function() {
 };
 
 /** @type {function(...*):?} */
+var _get_biggest_frame_blob_sz = Module["_get_biggest_frame_blob_sz"] = function() {
+  return (_get_biggest_frame_blob_sz = Module["_get_biggest_frame_blob_sz"] = Module["asm"]["get_biggest_frame_blob_sz"]).apply(null, arguments);
+};
+
+/** @type {function(...*):?} */
 var _read_frame = Module["_read_frame"] = function() {
   return (_read_frame = Module["_read_frame"] = Module["asm"]["read_frame"]).apply(null, arguments);
 };
