@@ -22,6 +22,7 @@ import { Float32BufferAttribute, Uint16BufferAttribute } from 'three';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton';
 import { BoxLineGeometry } from 'three/examples/jsm/geometries/BoxLineGeometry';
+import { create_vr_session } from './padgeo_xr_helpers/padgeo_threejs_vr_helper.mjs';
 
 const NOR = 'none';
 const AR = 'immersive-ar';
@@ -356,32 +357,9 @@ function App() {
 	}
 
 	function start_vr() {
-		if (! ('xr' in navigator)) {
-			console.error('xr not supported');
-			alert('xr not supported');
-			return;
-		}
-
-		navigator.xr.isSessionSupported(VR)
-		.then( (supported) => {
-			if (!supported) {
-				console.error('vr not supported');
-				alert('vr not supported');
-			}
-			else {
-				navigator.xr.requestSession(VR, vr_session_init_options)
-				.then( (session) => {
-					console.debug('vr ready');
-					console.debug(session);
-					current_mode = VR;
-					xr_session = session;
-					init_vr(session);
-				})
-				.catch( (error) => {
-					console.error(error);
-				});
-			}
-		})
+		create_vr_session( camera, renderer, null, null, () => {
+			start_vol_player();
+		} );
 	}
 
 	function vr_touch_handler( event ) {

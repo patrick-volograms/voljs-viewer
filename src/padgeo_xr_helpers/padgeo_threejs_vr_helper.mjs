@@ -82,7 +82,7 @@ export function create_vr_session(
                 //current_mode = VR;
                 //xr_session = session;
                 init_vr( session, camera, renderer );
-                on_session_created( session );
+                if ( on_session_created ) on_session_created( session );
             })
             .catch( ( error ) => {
                 console.error(error);
@@ -90,6 +90,10 @@ export function create_vr_session(
             });
         }
     })
+}
+
+export function exit_vr() {
+    
 }
 
 export function render_in_vr() {
