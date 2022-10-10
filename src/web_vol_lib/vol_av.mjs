@@ -31,8 +31,10 @@ export function set_video_frame_callback(callback) {
         return;
     }
 
-    video_frame_callback = function () {
-        callback( Math.trunc(video.currentTime * fps) );
+		// Note: 'metadata' is only supported in some browsers, but essential for good video texture sync.
+		// Otherwise use this callback; `callback( Math.trunc(video.currentTime * fps));`
+    video_frame_callback = (now, metadata) => {
+        callback( Math.floor( metadata.mediaTime * fps ) );
         if (is_playing) {
             video.requestVideoFrameCallback( video_frame_callback );
         }
