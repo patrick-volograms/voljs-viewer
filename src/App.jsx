@@ -169,7 +169,7 @@ function App() {
 			} );
 		volo_mesh = new THREE.Mesh(volo_geometry, mat);
 		volo_mesh.name = 'Vologram';
-		volo_mesh.scale.x = 1;
+		volo_mesh.scale.x = -1; // Reverse on x for "California" from "ainrofilaC"
 		volo_mesh.scale.y = 1;
 		volo_mesh.scale.z = 1;
 		volo_mesh.position.z = -2;
@@ -177,6 +177,7 @@ function App() {
 		
 		// Note: this is called from vol_player.mjs
 		VolPlayer.set_frame_callback(function (frameNumber, key, vert, uvs, ind) {
+			/* Original code.
 			volo_geometry.index.array = ind.slice();
 			volo_geometry.attributes.position.array = vert.slice();
 			volo_geometry.attributes.uv.array = uvs.slice();
@@ -184,12 +185,13 @@ function App() {
 			volo_geometry.index.needsUpdate = true;
 			volo_geometry.attributes.position.needsUpdate = true;
 			volo_geometry.attributes.uv.needsUpdate = true;
-
-			/*
+			*/
+			
+			// This should fix the buffer overrun issues with some volograms, but might add a small
+			// allocation overhead at runtime.
 			volo_geometry.setAttribute('position', new THREE.BufferAttribute(vert, 3 ) ); // f32
 			volo_geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2 ) );        // f32
 			volo_geometry.index = new THREE.BufferAttribute(ind, 1 );                     // u16
-			*/
 		});
 		VolPlayer.start();
 	}
