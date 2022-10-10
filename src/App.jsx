@@ -175,6 +175,7 @@ function App() {
 		volo_mesh.position.z = -2;
 		scene.add(volo_mesh);
 		
+		// Note: this is called from vol_player.mjs
 		VolPlayer.set_frame_callback(function (frameNumber, key, vert, uvs, ind) {
 			volo_geometry.index.array = ind.slice();
 			volo_geometry.attributes.position.array = vert.slice();
@@ -183,6 +184,12 @@ function App() {
 			volo_geometry.index.needsUpdate = true;
 			volo_geometry.attributes.position.needsUpdate = true;
 			volo_geometry.attributes.uv.needsUpdate = true;
+
+			/*
+			volo_geometry.setAttribute('position', new THREE.BufferAttribute(vert, 3 ) ); // f32
+			volo_geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2 ) );        // f32
+			volo_geometry.index = new THREE.BufferAttribute(ind, 1 );                     // u16
+			*/
 		});
 		VolPlayer.start();
 	}
