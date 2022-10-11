@@ -247,6 +247,7 @@ function App() {
 
 	function render( timestamp, frame ) {
 		stats.update();
+		camera.aspect = canvas_container.offsetWidth / canvas_container.offsetHeight;
 
 		switch (current_mode) {
 			case VR:
@@ -320,7 +321,6 @@ function App() {
 	}
 
 	function init_ar( session ) {
-		console.debug( session );
 		camera = new THREE.PerspectiveCamera( 
 			50, window.innerWidth / window.innerHeight, 0.1, 10 );
 		camera.position.set( 0, 1.6, 3 );
