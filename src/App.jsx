@@ -19,11 +19,9 @@ import Stats from 'three/examples/jsm/libs/stats.module';
 import * as VolPlayer from './web_vol_lib/vol_player.mjs';
 import { video } from './web_vol_lib/vol_av.mjs';
 import { Float32BufferAttribute, Uint16BufferAttribute } from 'three';
-import { ARButton } from 'three/examples/jsm/webxr/ARButton';
-import { VRButton } from 'three/examples/jsm/webxr/VRButton';
 import { BoxLineGeometry } from 'three/examples/jsm/geometries/BoxLineGeometry';
-import { create_vr_session } from './padgeo_xr_helpers/padgeo_vr_helper.mjs';
-import { begin_hit_test, create_ar_session, hit_test_source } from './padgeo_xr_helpers/padgeo_ar_helper.mjs';
+import { create_vr_session } from './pdg_xr_helpers/pdg_vr_helper.mjs';
+import { begin_hit_test, click_controller, create_ar_session, hit_test_source } from './pdg_xr_helpers/pdg_ar_helper.mjs';
 
 const NOR = 'none';
 const AR = 'immersive-ar';
@@ -90,8 +88,7 @@ function App() {
 			renderer.setAnimationLoop( render );
 		};
 
-		controller = renderer.xr.getController( 0 );
-		controller.addEventListener( 'select', onSelect );
+		controller = click_controller( renderer, onSelect );
 		scene.add( controller );
 
 		reticle = new THREE.Mesh(
@@ -114,12 +111,14 @@ function App() {
 		animate();
   	}, []);
 
-	function onSelect() {
+	async function onSelect() {
+		console.debug('onSelect');
 		if ( reticle.visible ) {
 			if ( !scene.getObjectByName( volo_mesh.name ) )
 			{
-				start_vol_player();
+				await start_vol_player();
 			}
+			console.debug(volo_mesh);
 			reticle.matrix.decompose( volo_mesh.position );
 		}
 	}
@@ -215,17 +214,12 @@ function App() {
 		renderer.xr.setSession( session );
 		session.addEventListener( 'end', deinit_vr );
 
-		document.addEventListener( 'mousedown', vr_touch_handler );
-		document.addEventListener( 'mouseup', vr_touch_handler );
-
 		start_vol_player();
 	}
 
 	function deinit_vr() {
 		vr_touch_end( null );
 		current_mode = NOR;
-		document.removeEventListener( 'mousedown', vr_touch_handler );
-		document.removeEventListener( 'mouseup', vr_touch_handler );
 
 		canvas_container = document.getElementById( 'canvas-container' );
     	camera = new THREE.PerspectiveCamera(
@@ -271,7 +265,6 @@ function App() {
 			const session = renderer.xr.getSession();
 			let hitTestSource = hit_test_source( session );
 			if ( hitTestSource ) {
-				console.debug( hitTestSource );
 				const hitTestResults = frame.getHitTestResults( hitTestSource );
 				const referenceSpace = renderer.xr.getReferenceSpace();
 				if ( hitTestResults.length ) {
@@ -288,16 +281,6 @@ function App() {
 
 	function render_in_vr() {
 		renderer.render(scene, camera);
-		if ( vr_touch_down ) {
-			var touch_length = Date.now() - vr_touch_start_time;
-			console.debug( touch_length );
-			if ( touch_length > 3000 ) {
-				console.debug( 'closing session' );
-				console.debug( renderer.xr );
-				console.debug( renderer.xr.getSession() );
-				renderer.xr.getSession()?.end();
-			}
-		}
 	}
 
 	function start_vr() {
@@ -341,7 +324,6 @@ function App() {
 		session.addEventListener( 'end', stop_xr );
 		current_mode = AR;
 		xr_session = session;
-		start_vol_player();
 	}
 
 	function stop_xr() {
@@ -358,32 +340,6 @@ function App() {
 		non_r_controls.target.set(0, 1.6, 0);
     	camera.position.set( 0, 1.6, 3 );
     	camera.rotation.set( 0, 0, 0 );
-	}
-
-	function vr_touch_handler( event ) {
-		console.debug( event );
-		switch (event.type) {
-			case "touchstart": break;
-			case "touchmove": break;
-			case "touchend": break;
-			case "mousedown": vr_touch_start( event ); break;
-			case "mousemove": break;
-			case "mouseup": vr_touch_end( event ); break;
-			default: return;
-		}
-	}
-
-	var vr_touch_start_time = -1;
-	var vr_touch_down = false;
-
-	function vr_touch_start( event ) {
-		console.debug( event );
-		vr_touch_start_time = Date.now();
-		vr_touch_down = true; 
-	}
-
-	function vr_touch_end( event ) {
-		vr_touch_down = false;
 	}
 
 	const speed_dial_actions = [

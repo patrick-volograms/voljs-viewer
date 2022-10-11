@@ -26,7 +26,7 @@ export function create_ar_session(
             document.body.appendChild( overlay );
 
             const initOptions = {
-                requiredFeatures: ["local-floor"],
+                requiredFeatures: [ 'local-floor' ],
                 optionalFeatures: [ 'dom-overlay' ],
                 domOverlay: { root: overlay }
             }
@@ -35,6 +35,10 @@ export function create_ar_session(
             .then( (session) => {
                 session[ar_test_requested] = false;
                 session[ar_hit_test_source] = null;
+                overlay.style.display = '';
+                session.addEventListener( 'end', () => {
+                    document.body.removeChild( overlay );
+                });
                 if ( on_session_created ) on_session_created( session );
             })
             .catch( (error) => {
@@ -46,7 +50,7 @@ export function create_ar_session(
 }
 
 export function begin_hit_test( session ) {
-    if (!( ar_test_requested in session ) || (session.ar_test_requested === false)) {
+    if (!( ar_test_requested in session ) || (session[ar_test_requested] === false)) {
         session.requestReferenceSpace( 'viewer' )
         .then( referenceSpace => {
             session.requestHitTestSource({
@@ -66,4 +70,10 @@ export function begin_hit_test( session ) {
 
 export function hit_test_source( session ) {
     return session[ar_hit_test_source] ?? null;
+}
+
+export function click_controller( renderer, on_click ) {
+    let controller = renderer.xr.getController( 0 );
+    controller.addEventListener( 'select', on_click );
+    return controller;
 }
