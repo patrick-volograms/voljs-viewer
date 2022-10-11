@@ -19,10 +19,9 @@ import Stats from 'three/examples/jsm/libs/stats.module';
 import * as VolPlayer from './web_vol_lib/vol_player.mjs';
 import { video } from './web_vol_lib/vol_av.mjs';
 import { Float32BufferAttribute, Uint16BufferAttribute } from 'three';
-import { ARButton } from 'three/examples/jsm/webxr/ARButton';
-import { VRButton } from 'three/examples/jsm/webxr/VRButton';
 import { BoxLineGeometry } from 'three/examples/jsm/geometries/BoxLineGeometry';
-import { create_vr_session } from './padgeo_xr_helpers/padgeo_threejs_vr_helper.mjs';
+import { create_vr_session } from './pdg_xr_helpers/pdg_vr_helper.mjs';
+import { begin_hit_test, click_controller, create_ar_session, hit_test_source } from './pdg_xr_helpers/pdg_ar_helper.mjs';
 
 const NOR = 'none';
 const AR = 'immersive-ar';
@@ -89,8 +88,7 @@ function App() {
 			renderer.setAnimationLoop( render );
 		};
 
-		controller = renderer.xr.getController( 0 );
-		controller.addEventListener( 'select', onSelect );
+		controller = click_controller( renderer, onSelect );
 		scene.add( controller );
 
 		reticle = new THREE.Mesh(
@@ -113,12 +111,14 @@ function App() {
 		animate();
   	}, []);
 
-	function onSelect() {
+	async function onSelect() {
+		console.debug('onSelect');
 		if ( reticle.visible ) {
 			if ( !scene.getObjectByName( volo_mesh.name ) )
 			{
-				start_vol_player();
+				await start_vol_player();
 			}
+			console.debug(volo_mesh);
 			reticle.matrix.decompose( volo_mesh.position );
 		}
 	}
@@ -223,17 +223,12 @@ function App() {
 		renderer.xr.setSession( session );
 		session.addEventListener( 'end', deinit_vr );
 
-		document.addEventListener( 'mousedown', vr_touch_handler );
-		document.addEventListener( 'mouseup', vr_touch_handler );
-
 		start_vol_player();
 	}
 
 	function deinit_vr() {
 		vr_touch_end( null );
 		current_mode = NOR;
-		document.removeEventListener( 'mousedown', vr_touch_handler );
-		document.removeEventListener( 'mouseup', vr_touch_handler );
 
 		canvas_container = document.getElementById( 'canvas-container' );
     	camera = new THREE.PerspectiveCamera(
@@ -250,22 +245,9 @@ function App() {
 		camera.rotation.set( 0, 0, 0 );
 	}
 
-	function init_ar( session ) {
-		camera = new THREE.PerspectiveCamera( 
-			50, window.innerWidth / window.innerHeight, 0.1, 10 );
-		camera.position.set( 0, 1.6, 3 );
-		renderer.setPixelRatio( window.devicePixelRatio );
-		renderer.setSize( window.innerWidth, window.innerHeight );
-		renderer.outputEncoding = THREE.sRGBEncoding;
-		renderer.xr.enabled = true;
-
-		renderer.xr.setSession( session );
-
-		start_vol_player();
-	}
-
 	function render( timestamp, frame ) {
 		stats.update();
+		camera.aspect = canvas_container.offsetWidth / canvas_container.offsetHeight;
 
 		switch (current_mode) {
 			case VR:
@@ -290,26 +272,11 @@ function App() {
 
 	function render_in_ar( frame ) {
 		if ( frame ) {
-			const referenceSpace = renderer.xr.getReferenceSpace();
 			const session = renderer.xr.getSession();
-			if ( hitTestSourceRequested === false ) {
-				session.requestReferenceSpace( 'viewer' ).then( 
-					function ( referenceSpace ) {
-					session.requestHitTestSource( { 
-						space: referenceSpace 
-					} ).then( function ( source ) {
-						hitTestSource = source;
-					} );
-				} );
-				session.addEventListener( 'end', function () {
-					hitTestSourceRequested = false;
-					hitTestSource = null;
-				} );
-				hitTestSourceRequested = true;
-			}
-
+			let hitTestSource = hit_test_source( session );
 			if ( hitTestSource ) {
 				const hitTestResults = frame.getHitTestResults( hitTestSource );
+				const referenceSpace = renderer.xr.getReferenceSpace();
 				if ( hitTestResults.length ) {
 					const hit = hitTestResults[ 0 ];
 					reticle.visible = true;
@@ -324,77 +291,64 @@ function App() {
 
 	function render_in_vr() {
 		renderer.render(scene, camera);
-		if ( vr_touch_down ) {
-			var touch_length = Date.now() - vr_touch_start_time;
-			console.debug( touch_length );
-			if ( touch_length > 3000 ) {
-				console.debug( 'closing session' );
-				console.debug( renderer.xr );
-				console.debug( renderer.xr.getSession() );
-				renderer.xr.getSession()?.end();
-			}
-		}
-	}
-
-	function start_ar() {
-		if (! ('xr' in navigator)) {
-			console.error('xr not supported');
-			alert('xr not supported');
-			return;
-		}
-
-		navigator.xr.isSessionSupported('immersive-ar')
-		.then( (supported) => {
-			if (!supported) {
-				console.error('ar not supported');
-				alert('ar not supported');
-			}
-			else {
-				navigator.xr.requestSession(AR, vr_session_init_options)
-				.then( (session) => {
-					console.debug('ar ready');
-					console.debug(session);
-					current_mode = AR;
-					xr_session = session;
-					init_ar(session);
-				})
-				.catch( (error) => {
-					console.error(error);
-				});
-			}
-		})
 	}
 
 	function start_vr() {
-		create_vr_session( camera, renderer, null, null, () => {
-			start_vol_player();
+		create_vr_session( init_vr, ( error ) => {
+			console.error( error );
 		} );
 	}
 
-	function vr_touch_handler( event ) {
-		console.debug( event );
-		switch (event.type) {
-			case "touchstart": break;
-			case "touchmove": break;
-			case "touchend": break;
-			case "mousedown": vr_touch_start( event ); break;
-			case "mousemove": break;
-			case "mouseup": vr_touch_end( event ); break;
-			default: return;
-		}
+	function init_vr( session ) {
+		camera = new THREE.PerspectiveCamera( 
+			50, window.innerWidth / window.innerHeight, 0.1, 10 );
+		camera.position.set( 0, 1.6, 3 );
+		renderer.setPixelRatio( window.devicePixelRatio );
+		renderer.setSize( window.innerWidth, window.innerHeight );
+		renderer.outputEncoding = THREE.sRGBEncoding;
+		renderer.xr.enabled = true;
+		renderer.xr.setSession( session );
+		session.addEventListener( 'end', stop_xr );
+		current_mode = VR;
+		xr_session = session;
+		start_vol_player();
 	}
 
-	var vr_touch_start_time = -1;
-	var vr_touch_down = false;
-
-	function vr_touch_start( event ) {
-		console.debug( event );
-		vr_touch_start_time = Date.now();
-		vr_touch_down = true; 
+	function start_ar() {
+		create_ar_session( init_ar, ( error ) => {
+			console.error( error );
+		} );
 	}
 
-	function vr_touch_end( event ) {
-		vr_touch_down = false;
+	function init_ar( session ) {
+		camera = new THREE.PerspectiveCamera( 
+			50, window.innerWidth / window.innerHeight, 0.1, 10 );
+		camera.position.set( 0, 1.6, 3 );
+		renderer.setPixelRatio( window.devicePixelRatio );
+		renderer.setSize( window.innerWidth, window.innerHeight );
+		renderer.outputEncoding = THREE.sRGBEncoding;
+		renderer.xr.enabled = true;
+		renderer.xr.setSession( session );
+		begin_hit_test( session );
+		session.addEventListener( 'end', stop_xr );
+		current_mode = AR;
+		xr_session = session;
+	}
+
+	function stop_xr() {
+		canvas_container = document.getElementById( 'canvas-container' );
+    	camera = new THREE.PerspectiveCamera(
+          	50, 
+          	canvas_container.offsetWidth / canvas_container.offsetHeight,
+        	0.1, 1000
+    	);
+
+    	renderer.setPixelRatio( window.devicePixelRatio );
+    	renderer.setSize(canvas_container.offsetWidth, canvas_container.offsetHeight);
+		non_r_controls = new OrbitControls(camera, renderer.domElement);
+		non_r_controls.target.set(0, 1.6, 0);
+    	camera.position.set( 0, 1.6, 3 );
+    	camera.rotation.set( 0, 0, 0 );
 	}
 
 	const speed_dial_actions = [
@@ -408,6 +362,7 @@ function App() {
 
   	return (
 	<Container id='canvas-container'
+		disableGutters
 		sx={{
 			position: 'fixed',
 			top: '0px',
